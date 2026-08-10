@@ -384,40 +384,46 @@ python generate_charts.py
 # Project Structure
 
 bellabeat-case-study/
+
+
 ├── data/
 
-│   ├── clean/
+        │   ├── clean/
+        
+        │   └── raw/
 
-│   └── raw/
 
-
-
+        
 ├── output/
 
-│   ├── activity_segment_distribution.png
+        │   ├── activity_segment_distribution.png
+        
+        │   ├── activity_vs_sleep_efficiency.png
+        
+        │   ├── health_fitness_flatness_panel.png
+        
+        │   ├── hourly_step_trends.png
+        
+        │   └── sleep_duration_distribution.png
 
-│   ├── activity_vs_sleep_efficiency.png
 
-│   ├── health_fitness_flatness_panel.png
-
-│   ├── hourly_step_trends.png
-
-│   └── sleep_duration_distribution.png
-
-
+        
 ├── scripts/
 
-│   └── generate_charts.py
+        │   └── generate_charts.py
 
 
+        
 ├── sql/
 
-│   ├── 01_clean_data.sql
+        │   ├── 01_clean_data.sql
+        
+        │   └── 02_analysis.sql
 
-│   └── 02_analysis.sql
-
-
+        
 ├── .gitignore
 
 
 └── [README.md](http://readme.md/)
+
+
