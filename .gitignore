@@ -1,0 +1,19 @@
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Python Cache & Artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Database & IDE Configurations
+*.sqlite3
+.vscode/
+.idea/
+.DS_Store
+
+# Large Raw Files (Optional: keep if under 100MB per file)
+# data/raw/
