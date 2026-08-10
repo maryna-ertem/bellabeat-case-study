@@ -191,8 +191,7 @@ Renamed all 9 columns from DBeaver's quoted CamelCase to lowercase. No nulls in 
 
 **fitbit.sleepday_merged**
 
-Source is `april-12-may-5-2016/sleepDay_merged.csv` only — the March folder has no sleep file, a real gap in the source. Found 3 duplicate id+date pairs, unrelated to the folder-boundary pattern; inspected the raw rows and confirmed they were true exact duplicates (identical across every column), cause unconfirmed. Dropped one copy per pair via `ctid`. **413 → 410 rows.** Open item: the source CSV's `wc -l` count is 413 data rows, but DBeaver imported 414 — a +1 discrepancy at import I haven't traced. The in-bed-vs-asleep sanity check (`totaltimeinbed >= totalminutesasleep`, both within 0–1440 min) is written but not yet run.
-
+Source is `april-12-may-5-2016/sleepDay_merged.csv` only — the March folder has no sleep file, a real gap in the source. Found 3 duplicate id+date pairs, unrelated to the folder-boundary pattern; inspected the raw rows and confirmed they were true exact duplicates (identical across every column), cause unconfirmed. Dropped one copy per pair via `ctid`. **413 → 410 rows.** Open item: the source CSV's `wc -l` count is 413 data rows, but DBeaver imported 414 — a +1 discrepancy at import I haven't traced.
 **fitbit.hourlysteps_merged / fitbit.hourlyintensities_merged**
 
 Same source-folder merge as `dailyactivity_merged`, same structure (`id`, `activityhour`, plus a value column) — cleaned both with the same queries. Same 2016-04-12 boundary overlap, this time across ~10 duplicate hourly rows per affected user instead of 1. Confirmed the duplicates were exact (matching step/intensity values) and dropped one copy per pair via `ctid`.
@@ -202,7 +201,7 @@ Same source-folder merge as `dailyactivity_merged`, same structure (`id`, `activ
 
 **fitbit.heartrate_seconds_merged**
 
-Decided to exclude this table from full cleaning. At 3.6M+ raw rows, per-second granularity needs aggregation before it's usable for anything, and cleaning all of it first is largely wasted effort — heart rate logging also covers far fewer users (15) than the activity tables (35). Added an index on `(id, time)` before any other work, since `GROUP BY` on unindexed 3.6M+ rows is slow. Confirmed the same 2016-04-12 boundary overlap via a per-day row count (direct `GROUP BY` on the full key was too slow to review row-by-row) and dropped exact duplicates via `ctid`. Converted `time` to TIMESTAMP and `value` to INTEGER. **3,638,339 → 3,614,915 rows.** Null check and the 30–220 bpm plausibility check are written but not yet run. For the Analyze phase, I'm using a daily aggregate (avg/min/max heart rate per user per day) rather than the raw table.
+Decided to exclude this table from full cleaning. At 3.6M+ raw rows, per-second granularity needs aggregation before it's usable for anything, and cleaning all of it first is largely wasted effort — heart rate logging also covers far fewer users (15) than the activity tables (35). Added an index on `(id, time)` before any other work, since `GROUP BY` on unindexed 3.6M+ rows is slow. Confirmed the same 2016-04-12 boundary overlap via a per-day row count (direct `GROUP BY` on the full key was too slow to review row-by-row) and dropped exact duplicates via `ctid`. Converted `time` to TIMESTAMP and `value` to INTEGER. **3,638,339 → 3,614,915 rows.** Null check and the 30–220 bpm plausibility check are done. For the Analyze phase, I'm using a daily aggregate (avg/min/max heart rate per user per day) rather than the raw table.
 
 **sleep_tracking.smartwatch_sleep_dataset**
 
@@ -235,13 +234,14 @@ Findings below are organized by theme. Every number traces to `sql/08_analysis_c
 
 FitBit `dailyactivity_merged` — 35 users, 2016-03-12 to 2016-05-12
 
-- Average daily steps: **7,359** (CDC benchmark: 10,000)
+- - Average daily steps: **7,359** (CDC benchmark: 10,000). Averaging per-user first, then across users, gives **7,060** — close enough that the row-level figure isn't being skewed by a few heavy loggers, so 7,359 is used throughout this report.
 - **31.3%** of days met the 10,000-step benchmark
 - Average sedentary time: **1,002 min/day** vs. **221 min/day** active (very + fairly + lightly active combined)
 - **127 days (9.2% of rows)** show 0 steps but nonzero calories — device worn, user inactive
 - **9 days (0.7% of rows)** show 0 steps and 0 calories — device not worn, not zero activity
 - Average calories: **2,290/day**
 - Step count by hour of day rises sharply from 6am, peaks between noon and 8pm (highest at 7pm, 555 avg steps), and drops off after 9pm — directly useful for timing a Bellabeat activity nudge.
+- Device retention: of 35 users, **25 (71.4%)** wore the device on 31+ days, **8 (22.9%)** on 15–30 days, and **2 (5.7%)** on fewer than 15 days — most of the cohort stuck with the device for the bulk of the study window.
 
 ### Sleep patterns
 
@@ -251,6 +251,21 @@ FitBit `sleepday_merged`
 - Average sleep: **7.0 hours/night** (recommended: 7–9)
 - **44.1%** of nights fell under 7 hours
 - Average sleep efficiency (asleep ÷ time in bed): **91.6%**
+- Sedentary time vs. sleep quality (FitBit, joined on user + date): lower-sedentary days showed **7.2 hrs** asleep at 91.5% efficiency vs. **2.6 hrs** at 93.4% efficiency on higher-sedentary days. Checked and set aside — the higher-sedentary group is only 22 nights (5.4% of sleep data), too small to treat as a finding despite the size of the gap.
+- 
+
+### Smartwatch sleep by activity level
+
+Smartwatch Sleep Dataset, 19,978 sessions, bucketed by that day's step count:
+
+| Activity level | Sessions | Avg sleep hours | Avg sleep efficiency |
+| --- | --- | --- | --- |
+| Sedentary (<5k) | 7,805 | 7.45 | 93.34% |
+| Low Active (5k–7.5k) | 5,477 | 7.55 | 93.24% |
+| Somewhat Active (7.5k–10k) | 4,203 | 7.48 | 93.49% |
+| Highly Active (10k+) | 2,493 | 7.49 | 93.15% |
+
+Flat across every bucket — daytime activity level shows no relationship to that night's sleep duration or efficiency in this dataset.
 
 ### Cross-dataset comparison
 
@@ -265,51 +280,10 @@ FitBit `sleepday_merged`
 
 FitBit's average daily steps sit noticeably below the Health & Fitness dataset's (7,359 vs. 8,628) despite the two being otherwise comparable populations — worth a note either as a real behavioral difference or a reflection of FitBit's smaller, older, self-selected sample. Sleep hours line up closely between the two datasets that report it (7.0 vs. 7.0). The smartwatch dataset's three metrics need to be re-pulled now that its cleaning is finished (19,978 rows, not the original 20,000).
 
-Findings below are organized by theme. Every number traces to `sql/02_analysis.sql`.
-
-### Activity levels
-
-FitBit `dailyactivity_merged` — 35 users, 2016-03-12 to 2016-05-12
-
-- Average daily steps: **7,359** (CDC benchmark: 10,000)
-- **31.3%** of days met the 10,000-step benchmark
-- Average sedentary time: **1,002 min/day** vs. **221 min/day** active (very + fairly + lightly active combined)
-- **127 days (9.2% of rows)** show 0 steps but nonzero calories — device worn, user inactive
-- **9 days (0.7% of rows)** show 0 steps and 0 calories — device not worn, not zero activity
-- Average calories: **2,290/day**
-- Step count by hour of day rises sharply from 6am, peaks between noon and 8pm (highest at 7pm, 555 avg steps), and drops off after 9pm — directly useful for timing a Bellabeat activity nudge.
-
-### Sleep patterns
-
-FitBit `sleepday_merged`
-
-- **68.6%** of activity-tracking users (24 of 35) also logged sleep data — a real adoption gap, not a data gap.
-- Average sleep: **7.0 hours/night** (recommended: 7–9)
-- **44.1%** of nights fell under 7 hours
-- Average sleep efficiency (asleep ÷ time in bed): **91.6%**
-
-### Cross-dataset comparison
-
-`Health and Fitness Dataset` and `Smartwatch Sleep Dataset` share no user IDs with FitBit — metrics below are compared side by side, not joined.
-
-| Metric | FitBit | Health & Fitness | Smartwatch Sleep |
-| --- | --- | --- | --- |
-| Sample size | 35 users | 3,000 participants | 19,978 sessions (2,000 users) |
-| Avg daily steps | 7,359 | 8,628 | 6,048 |
-| Avg sleep hours | 7.0 | 7.0 | 7.5 |
-| Avg stress/intensity | — (not tracked) | 5.5 | 34.8 |
-
-FitBit's average daily steps sit between the other two — lower than Health & Fitness (7,359 vs. 8,628), higher than the smartwatch dataset (7,359 vs. 6,048). Sleep hours are consistent across all three that report it (7.0–7.5). Stress isn't directly comparable between Health & Fitness (5.5) and Smartwatch Sleep (34.8) — the two datasets almost certainly use different scales, so this is flagged rather than read as "smartwatch users are more stressed."
-
-**Open items carried into Analyze**
-
-- `avg_calories_burned` in `health_fitness_dataset` came back as **15** — very low for any recorded activity. Not yet investigated; don't use this figure in the write-up until it's checked.
-- `stress_score` (smartwatch, avg 34.8) and `stress_level` (Health & Fitness, avg 5.5) are very likely different scales — don't compare them directly without confirming the smartwatch dataset's scale.
-- Several sanity/null checks are still unlogged (see Process section per table) — none found a problem so far where they have been run, but "not yet run" isn't the same as "clean."
 
 **Limitations**
 
-- FitBit sample is small (35 users) and short (~2 months) — a course-provided dataset, not intended for statistical generalization to Bellabeat's full user base.
+- FitBit sample is small (35 users - 30 according to Kaggle description) and short (~2 months) — a course-provided dataset, not intended for statistical generalization to Bellabeat's full user base.
 - Supplementary datasets are likely synthetic/compiled (per the ROCCC evaluation) and not linked to FitBit users, so findings are directional comparisons, not a single unified population.
 - Heart rate tracking within FitBit itself covers only 15 of the 35 users — any heart-rate-based finding applies to a smaller, unverified-representative subset.
 
@@ -396,16 +370,18 @@ bellabeat-case-study/
         
 ├── output/
 
-        │   ├── activity_segment_distribution.png
+        │   ├── 01_activity_segments.png
         
-        │   ├── activity_vs_sleep_efficiency.png
+        │   ├──  02_weekday_vs_weekend.png
         
-        │   ├── health_fitness_flatness_panel.png
+        │   ├──  03_steps_by_hour.png
         
-        │   ├── hourly_step_trends.png
+        │   ├──  04_sleep_distribution.png
         
-        │   └── sleep_duration_distribution.png
-
+        │   ├──  05_health_fitness_flatness.png
+        
+        │   ├──  06_cross_dataset_comparison.png
+        
 
         
 ├── scripts/
