@@ -385,19 +385,39 @@ python generate_charts.py
 
 bellabeat-case-study/
 ├── data/
+
 │   ├── clean/
+
 │   └── raw/
-├── notebooks/
+
+
+
 ├── output/
+
 │   ├── activity_segment_distribution.png
+
 │   ├── activity_vs_sleep_efficiency.png
+
 │   ├── health_fitness_flatness_panel.png
+
 │   ├── hourly_step_trends.png
+
 │   └── sleep_duration_distribution.png
+
+
 ├── scripts/
+
 │   └── generate_charts.py
+
+
 ├── sql/
+
 │   ├── 01_clean_data.sql
+
 │   └── 02_analysis.sql
+
+
 ├── .gitignore
+
+
 └── [README.md](http://readme.md/)
